@@ -1,3 +1,7 @@
 ## Rxjs 제대로 사용하기
 
-참고 https://hyunseob.github.io/2016/10/09/understanding-reactive-programming-and-rxjs/
+참고 https://auth0.com/blog/understanding-reactive-programming-and-rxjs/
+
+RxJS가 어떻게 동작하는지 보기 위해서, 간단한 날씨 어플을 작성해보자.
+우편번호를 입력하기 위한 텍스트 input이 있고, 버튼 클릭으로 Submit하면 우편번호 위치의 현재 온도 데이터를 얻기위한 요청이 전송된다. 온도를 얻고나면, 우편번호와 온도를 함께 페이지에 표시한다.
+또한 페이지에 많은 온도를 넣어 계속 Watch를 하도록 만들거다. 그리고 지정한 시간 후에 온도를 새로고침하는 타이머를 만들거다. 
