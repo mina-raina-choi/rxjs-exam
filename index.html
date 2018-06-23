@@ -1,40 +1,149 @@
 <html lang="ko">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Weather Monitoring in RxJS</title>
-  <style>
-  #form {
-    margin-bottom: 20px;
-  }
-  .location {
-    float: left;
-    padding: 10px;
-    margin-right: 20px;
-    margin-bottom: 20px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-  }
-  .location p {
-    margin-top: 10px;
-    margin-bottom: 10px;
-    text-align: center;
-  }
-  .zip { font-size: 2em; }
-  .temp { font-size: 4em; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Weather Monitoring in RxJS</title>
+    <style>
+        #form {
+            margin-bottom: 20px;
+        }
+
+        .location {
+            float: left;
+            padding: 10px;
+            margin-right: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .location p {
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .zip {
+            font-size: 2em;
+        }
+
+        .temp {
+            font-size: 4em;
+        }
+    </style>
 </head>
+
 <body>
-  <div id="app-container">
-    <div id="form">
-      <label>Zip Code:</label>
-      <input type="text" id="zipcode-input">
-      <button id="add-location">Add Location</button>
+    <div id="app-container">
+        <div id="form">
+            <label>Zip Code:</label>
+            <input type="text" id="zipcode-input">
+            <button id="add-location">Add Location</button>
+        </div>
     </div>
-  </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/4.1.0/rx.all.min.js"></script>
-  <script>
-  // our code will go here
-  console.log('RxJS included?', !!Rx);
-  </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/4.1.0/rx.all.min.js"></script>
+    <script>
+        // our code will go here
+        console.log('RxJS included?', !!Rx);
+
+        // <!-- html 태크 참조 -->
+        const appContainer = document.getElementById('app-container');
+        const zipcodeInput = document.getElementById('zipcode-input');
+        const addLocationBtn = document.getElementById('add-location');
+
+        // <!-- Rx.Observable 객체의 fromEvent메소드를 사용해서 addLocationBtn의 클릭이벤트로부터 스트림을 만듦 -->
+        // 반환된 스트림의 각 값을 true로 매핑하기 위해서 map메소드 사용.
+        // 이벤트가 동작하는 지 확인하기 위해서 스트림의 구독자Subscriber를 추가하는 forEach 사용
+        const btnClickStream = Rx.Observable
+            .fromEvent(addLocationBtn, 'click')
+            .map(() => true)
+        // .forEach(val => console.log('btnClickStream val', val));
+
+
+
+        // input에서 발생한 이벤트로부터 스트림 만듦
+        // input 이벤트의 값을 추출하기 위해 map사용. 
+        // 문자열 5가 아닌 값들을 제거하기 위해 filter사용. filter는 해당 조건식이 true일 때만 동작
+        const zipInputStream = Rx.Observable
+            .fromEvent(zipcodeInput, 'input')
+            .map(e => e.target.value)
+            .filter(zip => zip.length === 5)
+        // .forEach(val => console.log('zipInputStream val', val));
+
+
+        // Get zipcode after button clicked
+        // btnClickStream의 withLatestFrom을 호출하여 zipInputStream을 넘겼다. 
+        // btnClickStream의 값이 보일 때마다 zipInputstream의 가장 최신값을 얻고, "result selector"로 전달하는 것을 의미
+        const zipcodeStream = btnClickStream
+            .withLatestFrom(zipInputStream, (click, zip) => zip)
+            // 새로운값일 경우에만 다음으로 넘어감
+            .distinct()
+        // .forEach(val => console.log('zipcodeStream val', val))
+
+        // 우편번호가 추가되거나 타이머의 시간이 지날 때마다 호출할 재사용성 높은 날씨 api가 필요
+        // fetch가 promise를 반환하니 then으로 받아준다.
+        const getTemperature = zip =>
+            fetch(`http://api.openweathermap.org/data/2.5/weather?q=${zip},us&units=imperial&appid=b094bb6c2c2da0c401b050e27e6fbaac`)
+                .then(res => res.json());
+
+        // getTemperature에서 반환된 Promise로 스트림을 생성. 
+        // 스트림을 반환하기 때문에 Rx.Observable 이 가지는 모든 메소드를 사용할 수 있다.
+        // 우편번호와 온도에만 관심이 있기떄문에, 해당 정보만 가지는 객체를 반환!!!
+        // map을 사용해서 입력을 destructuring하여 온도를 출력.
+        // https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment 참고
+        const zipTemperatureStreamFactory = zip =>
+            Rx.Observable
+                .fromPromise(getTemperature(zip))
+                .map(({ main: { temp } }) => ({ temp, zip }))
+
+        // Get new zip at each button click, get its
+        // temperature, and paint it to the screen
+        // 우편번호 스트림의 flatMap은 스트림으로 만들어진 스트림을 인자로 받아 각 스트림으로부터 값을 얻고, 스트림으로 반환하여 사용가능하도록 한다. map과 동일
+        zipcodeStream
+            .flatMap(zipTemperatureStreamFactory)
+            // forEach를 사용해 각 데이터를 얻고 페이지를 추가. 
+            .forEach(({ zip, temp }) => {
+                const locationEle = document.createElement('div');
+                locationEle.id = `zip-${zip}`;
+                locationEle.classList.add('location');
+
+                const zipEle = document.createElement('p');
+                zipEle.classList.add('zip');
+                zipEle.innerText = zip;
+
+                const tempEle = document.createElement('p');
+                tempEle.classList.add('temp');
+                tempEle.innerHTML = `${temp}&deg;F`;
+
+                locationEle.appendChild(zipEle);
+                locationEle.appendChild(tempEle);
+                appContainer.appendChild(locationEle);
+                zipcodeInput.value = '';
+            })
+
+
+        // 입력한 모든 우편번호를 얻을 수 있는지 확인해 봐야한다. 
+        // ReplaySubject를 사용!!! : 스트림을 구독하고 스트림으로부터 받은 모든 값을 기억. 원할 떄마다 반복
+        // Create stream that can replay all zips at will
+        const replayZipsStream = new Rx.ReplaySubject();
+        // 새로운 ReplaySubject를 만들고 zipcodeStream을 구독
+        zipcodeStream.subscribe(replayZipsStream);
+
+
+        // Create a timer to refresh the data
+        // and update the page
+        Rx.Observable
+            .interval(10000)
+            // flatMapLatest를 사용하는 이유는 replayZipsStream이 단 하나의 구독자만 가지는 것을 보장하고 싶기 때문
+            .flatMapLatest(() => replayZipsStream)
+            .flatMap(zipTemperatureStreamFactory)
+            .forEach(({ zip, temp }) => {
+                console.log('Updating!', zip, temp);
+                const locationEle = document.getElementById(`zip-${zip}`);
+                const tempEle = locationEle.querySelector('.temp');
+                tempEle.innerHTML = `${temp}&deg;F`;
+            })
+    </script>
 </body>
+
 </html>
